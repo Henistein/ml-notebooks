@@ -16,7 +16,7 @@ def compute_gradients(images, target_class_idx):
   if images.requires_grad is False: images.requires_grad = True
   logits = model(images)
   probs = torch.nn.functional.softmax(logits, dim=-1)[:, target_class_idx]
-  grads = torch.autograd.grad(outputs=probs, inputs=images, grad_outputs=torch.ones_like(probs), retain_graph=True, create_graph=True)[0]
+  grads = torch.autograd.grad(outputs=probs, inputs=images, grad_outputs=torch.ones_like(probs))[0]
   return grads
 
 def integral_approximation(gradients):
@@ -69,11 +69,12 @@ def integrated_gradients(baseline, image, target_class_idx, m_steps=50, batch_si
 
   return ig
 
+from tqdm import trange
 if __name__ == '__main__':
   # load model
   model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=True).cuda()
   model.eval()
-  
+
   # load image
   url = 'http://storage.googleapis.com/download.tensorflow.org/example_images/Giant_Panda_2.jpeg'
   #url = 'https://hips.hearstapps.com/hmg-prod/images/2016-bmw-m2-202-1585760824.jpg'
@@ -88,8 +89,8 @@ if __name__ == '__main__':
   image = resize(raw_img)
 
   # vars
-  m_steps = 20
-  batch_size = 5
+  m_steps = 256
+  batch_size = 16
   target_class_idx = 388 # giant panda
   #target_class_idx = 817 # sports car
   baseline = np.zeros((224, 224, 3), dtype=np.uint8)
