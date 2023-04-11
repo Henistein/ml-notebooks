@@ -10,7 +10,12 @@ from torchvision import transforms
 
 def interpolate_images(baseline, image, alphas):
   # Interpolate the images with alphas
-  return [Image.blend(baseline, image, alpha) for alpha in alphas]
+  alphas_x = alphas[:, np.newaxis, np.newaxis, np.newaxis]
+  baseline_x = baseline[np.newaxis, :]
+  input_x = image[np.newaxis, :]
+  delta = input_x - baseline_x
+  images = baseline_x +  alphas_x * delta
+  return images
 
 def compute_gradients(images, target_class_idx):
   if images.requires_grad is False: images.requires_grad = True
@@ -33,7 +38,7 @@ def integrated_gradients(baseline, image, target_class_idx, m_steps=50, batch_si
   ])
 
   # 1. Generate alphas
-  alphas = torch.linspace(0.0, 1.0, m_steps+1)
+  alphas = np.linspace(0.0, 1.0, m_steps+1)
 
   # Collect gradients
   gradient_batches = []
@@ -45,9 +50,9 @@ def integrated_gradients(baseline, image, target_class_idx, m_steps=50, batch_si
     alpha_batch = alphas[from_:to]
 
     # 2. Generate interpolated inputs between baseline and input
-    interpolated_imgs = interpolate_images(Image.fromarray(baseline), image, alpha_batch)
-    # convert pil images to torch.tensors and stack them
-    interpolated_imgs = torch.stack([normalize(pil_img) for pil_img in interpolated_imgs]).cuda()
+    interpolated_imgs = interpolate_images(baseline, np.array(image), alpha_batch)
+    # convert ndarray images to torch.tensors and stack them
+    interpolated_imgs = torch.stack([normalize(img.astype(np.uint8)) for img in interpolated_imgs]).cuda()
     print(interpolated_imgs.shape)
 
     # 3. Compute gradients between model outputs and interpolated inputs
@@ -58,7 +63,7 @@ def integrated_gradients(baseline, image, target_class_idx, m_steps=50, batch_si
   # Stack path gradients together row-wise into single tensor.
   total_gradients = torch.cat(gradient_batches, dim=0).cuda()
 
-  # Integral approximation through averaging gradients.
+  # 4. Integral approximation through averaging gradients.
   avg_gradients = integral_approximation(gradients=total_gradients)
 
   # permute to (H, W, C) and move to cpu
@@ -90,7 +95,7 @@ if __name__ == '__main__':
 
   # vars
   m_steps = 256
-  batch_size = 16
+  batch_size = 8
   target_class_idx = 388 # giant panda
   #target_class_idx = 817 # sports car
   baseline = np.zeros((224, 224, 3), dtype=np.uint8)
